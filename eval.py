@@ -26,10 +26,10 @@ import imageio
 parser = argparse.ArgumentParser()
 parser.add_argument('--branch', default='demo', help="demo|eval")
 parser.add_argument('--direction', default='vision2touch', help="vision2touch|touch2vision")
-parser.add_argument('--epoch', type=int, default=74)
+parser.add_argument('--epoch', type=int, default=1)
 parser.add_argument('--eval_lst', default='data_lst')
 parser.add_argument('--batch_size', type=int, default=64)
-parser.add_argument('--workers', type=int, default=10)
+parser.add_argument('--workers', type=int, default=0)
 parser.add_argument('--ngf', type=int, default=64)
 parser.add_argument('--ndf', type=int, default=64)
 parser.add_argument('--nc', type=int, default=3)
@@ -67,12 +67,12 @@ args.dir = os.path.join('dump_' + args.direction)
 print(args)
 
 trans_touch = transforms.Compose([
-    transforms.Scale(args.crop_size),
+    transforms.Resize(args.crop_size),
     transforms.CenterCrop(args.crop_size),
 ])
 
 trans_lowres = transforms.Compose([
-    transforms.Scale(args.scale_size_lowres),
+    transforms.Resize(args.scale_size_lowres),
     transforms.CenterCrop(args.crop_size_lowres)
 ])
 
@@ -81,10 +81,17 @@ trans_to_tensor = transforms.Compose([
     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
 ])
 
+trans_to_tensor_2 = transforms.Compose([
+    transforms.ToTensor(),
+    # transforms.Normalize((0.36), (0.56))  #效果还行
+    # transforms.Normalize((0.4), (0.6))  #效果还行
+    transforms.Normalize((0.1307,), (0.3081,))
+])
+
 
 img_datasets = {'valid': VisionTouchDataset(
     'valid', args.eval_lst, args.w_timewindow,
-    trans_touch, trans_lowres, trans_to_tensor,
+    trans_touch, trans_lowres, trans_to_tensor, trans_to_tensor_2,
     args.scale_size, args.crop_size, args.brightness, args.contrast,
     args.saturation, args.hue)}
 
@@ -115,7 +122,6 @@ if use_gpu:
 # read valid lst
 valid_all_lst = open(args.eval_lst, 'r').readlines()
 len_valid_all_lst = len(valid_all_lst)
-
 
 
 # combine images for simultaneous vision and touch
@@ -288,8 +294,8 @@ action_dir = os.path.join(args.dir, args.branch, 'actions/epoch_' + str(args.epo
 os.system('mkdir -p ' + action_dir)
 
 for phase in ['valid']:
+    print("phase:",phase)
     for i, data in enumerate(dataloaders[phase], 0):
-
         volatile = phase == 'valid'
 
         if use_gpu:
