@@ -27,16 +27,16 @@ parser.add_argument('--outf', default='files')
 parser.add_argument('--outf_img', default='imgs')
 parser.add_argument('--outf_ckp', default='ckps')
 parser.add_argument('--path_to_weight_lst', default='data_lst/weight_vision2touch.txt')
-parser.add_argument('--gpu_ids', default='0')
-parser.add_argument('--batch_size', type=int, default=64)
-parser.add_argument('--workers', type=int, default=10)
+parser.add_argument('--gpu_ids', default='1')
+parser.add_argument('--batch_size', type=int, default=60)
+parser.add_argument('--workers', type=int, default=16)
 parser.add_argument('--ngf', type=int, default=64)
 parser.add_argument('--ndf', type=int, default=64)
 parser.add_argument('--nc', type=int, default=3)
 parser.add_argument('--np', type=int, default=7)
 parser.add_argument('--beta1', type=float, default=0.5)
 parser.add_argument('--lr', type=float, default=0.0002)
-parser.add_argument('--niter', type=int, default=100)
+parser.add_argument('--niter', type=int, default=5)
 parser.add_argument('--lam_L1', type=float, default=10.0)
 parser.add_argument('--use_lsgan', type=bool, default=True)
 
@@ -50,7 +50,7 @@ parser.add_argument('--saturation', type=float, default=0.3)
 parser.add_argument('--hue', type=float, default=0.2)
 
 parser.add_argument('--w_timewindow', type=int, default=1)
-parser.add_argument('--w_resampling', type=int, default=1)
+parser.add_argument('--w_resampling', type=int, default=0)
 parser.add_argument('--w_L1Loss', type=int, default=1)
 parser.add_argument('--w_GANLoss', type=int, default=1)
 
@@ -72,12 +72,12 @@ os.system('mkdir -p ' + outf_img)
 os.system('mkdir -p ' + outf_ckp)
 
 trans_touch = transforms.Compose([
-    transforms.Scale(args.crop_size),
+    transforms.Resize(args.crop_size),
     transforms.CenterCrop(args.crop_size),
 ])
 
 trans_lowres = transforms.Compose([
-    transforms.Scale(args.scale_size_lowres),
+    transforms.Resize(args.scale_size_lowres),
     transforms.CenterCrop(args.crop_size_lowres)
 ])
 
@@ -86,11 +86,20 @@ trans_to_tensor = transforms.Compose([
     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
 ])
 
+trans_to_tensor_2 = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.Normalize((0.36), (0.56))  #效果还行
+    # transforms.Normalize((0.4), (0.6))  #效果还行
+    # transforms.Normalize((0.1307,), (0.3081,))
+])
+
 img_datasets = {x: VisionTouchDataset(
-    x, x + "_lst.txt",
-    args.w_timewindow, trans_touch, trans_lowres, trans_to_tensor,
-    args.scale_size, args.crop_size,
-    args.brightness, args.contrast, args.saturation, args.hue)
+    # x, "./data_lst/"+ x + "_lst.txt",#注释
+    x, "./data_lst/train_lst.txt",
+    w_timewindow = args.w_timewindow, trans_des = trans_touch, trans_lowres = trans_lowres,
+    trans_to_tensor = trans_to_tensor, trans_to_tensor_2 = trans_to_tensor_2,
+    scale_size = args.scale_size, crop_size = args.crop_size,
+    brightness = args.brightness, contrast = args.contrast, saturation = args.saturation, hue = args.hue)
     for x in ['train', 'valid']}
 
 dataset_sizes = {x: len(img_datasets[x]) for x in ['train', 'valid']}
@@ -117,26 +126,34 @@ else:
 use_gpu = torch.cuda.is_available()
 gpu_ids = args.gpu_ids
 
+if use_gpu:
+    gpu_ids = [int(i) for i in args.gpu_ids.split(',')]  # 将args.gpu_ids的字符串按逗号分隔成整数列表
+    device = torch.device("cuda:{}".format(gpu_ids[0]))
+else:
+    device = None
+
 # define generation network
 netG = _netG_resnet(args.np, args.nc, args.ngf, args.w_timewindow)
-print(netG)
+# print(netG)
 
 # define discrimination network
 netD = _netD(args.nc, args.np, args.ndf, args.w_timewindow)
-print(netD)
+# print(netD)
 
-criterionGAN = GANLoss(use_lsgan=args.use_lsgan, use_gpu=use_gpu)
+criterionGAN = GANLoss(use_lsgan=args.use_lsgan, use_gpu=use_gpu, gpu_ids = gpu_ids)
 criterionL1 = nn.L1Loss()
 
 label = torch.FloatTensor(args.batch_size)
+label = label.to(device)
 real_label = 1
 fake_label = 0
-if use_gpu:
-    netG.cuda()
-    netD.cuda()
-    criterionGAN.cuda()
-    criterionL1.cuda()
-    label = label.cuda()
+# if use_gpu:
+#     netG.cuda()
+#     netD.cuda()
+#     criterionGAN.cuda()
+#     criterionL1.cuda()
+#     label = label.cuda()
+
 
 optimizerD = optim.Adam(netD.parameters(), lr=args.lr, betas=(args.beta1, 0.999))
 optimizerG = optim.Adam(netG.parameters(), lr=args.lr, betas=(args.beta1, 0.999))
@@ -160,26 +177,40 @@ for epoch in range(args.niter):
             volatile = phase == 'valid'
 
             if use_gpu:
-                for j in xrange(len(data)):
+                for j in range(len(data)):
                     data[j] = Variable(data[j].cuda(), volatile=volatile)
             else:
-                for j in xrange(len(data)):
+                for j in range(len(data)):
                     data[j] = Variable(data[j], volatile=volatile)
 
-            ref_src_lowres, ref_des_lowres, src_lowres, des_lowres, \
-            ref_src, ref_des, src = data
+            ref_src_lowres, ref_des_lowres, src_lowres, des_lowres, ref_src, ref_des, src, _ = data
+
+            # Move data to the specified device
+            ref_src_lowres = ref_src_lowres.to(device)
+            ref_des_lowres = ref_des_lowres.to(device)
+            src_lowres = src_lowres.to(device)
+            des_lowres = des_lowres.to(device)
+            ref_src = ref_src.to(device)
+            ref_des = ref_des.to(device)
+            src = src.to(device)
+            netD = netD.to(device)
+            # netG = torch.nn.DataParallel(netG, device_ids=gpu_ids, output_device=device)
+            # netD = torch.nn.DataParallel(netD, device_ids=gpu_ids, output_device=device)
 
             # Update D network
             ## train with real
             netD.zero_grad()
             output = netD(ref_src_lowres, ref_des_lowres, src_lowres, des_lowres)
+            output = output.to(device)
+            criterionGAN = criterionGAN.to(device)
             errD_real = criterionGAN(output, True)
             D_x = output.data.mean()
 
             ## train with fake
+            netG = netG.to(device)
             fake_des_lowres = netG(ref_src, ref_des, src)
             output = netD(ref_src_lowres, ref_des_lowres, src_lowres, fake_des_lowres.detach())
-            errD_fake = criterionGAN(output, False)
+            errD_fake = criterionGAN(output.to(device), False)
             D_G_1 = output.data.mean()
             errD = (errD_real + errD_fake) * 0.5
 
@@ -190,8 +221,8 @@ for epoch in range(args.niter):
             # Update G network
             netG.zero_grad()
             output = netD(ref_src_lowres, ref_des_lowres, src_lowres, fake_des_lowres)
-            errG_GAN = criterionGAN(output, True)
-            errG_L1 = criterionL1(fake_des_lowres, des_lowres) * args.lam_L1
+            errG_GAN = criterionGAN(output.to(device), True)
+            errG_L1 = criterionL1(fake_des_lowres.to(device), des_lowres).to(device) * args.lam_L1
 
             # must have at least GANLoss or L1Loss
             if args.w_GANLoss == False:
@@ -205,10 +236,11 @@ for epoch in range(args.niter):
                 errG.backward()
                 optimizerG.step()
             D_G_2 = output.data.mean()
+            if i % 1000 == 0:
+                print('%s [%d/%d][%d/%d] Loss_D: %.4f Loss_G: GAN %.4f L1 %.4f D(x): %.4f D(G(z)): %.4f / %.4f' %
+                      (phase, epoch, args.niter, i, len(dataloaders[phase]), errD.data.item(),#将errD.data[0]改为errD.data.item()
+                       errG_GAN.data.item(), errG_L1.data.item(), D_x, D_G_1, D_G_2))#将errG_GAN.data[0], errG_L1.data[0]改为errG_GAN.data.item(), errG_L1.data.item()
 
-            print('%s [%d/%d][%d/%d] Loss_D: %.4f Loss_G: GAN %.4f L1 %.4f D(x): %.4f D(G(z)): %.4f / %.4f' %
-                  (phase, epoch, args.niter, i, len(dataloaders[phase]), errD.data[0],
-                   errG_GAN.data[0], errG_L1.data[0], D_x, D_G_1, D_G_2))
 
             if phase == 'train':
                 stride = 400
