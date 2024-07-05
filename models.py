@@ -4,6 +4,7 @@ from torch.nn import init
 from torchvision import models
 from torch.autograd import Variable
 import math
+import torch.utils.model_zoo as model_zoo
 
 
 def weights_init_normal(m):
@@ -76,19 +77,19 @@ def get_down_seq(ni, nf, no):
         nn.LeakyReLU(0.2, inplace=True),
         # state size. (nf) x 64 x 64 
         nn.Conv2d(nf, nf * 2, 4, 2, 1),
-        nn.InstanceNorm2d(nf * 2),
+        nn.InstanceNorm2d(nf * 2, track_running_stats=True),
         nn.LeakyReLU(0.2, inplace=True),
         # state size. (nf * 2) x 32 x 32 
         nn.Conv2d(nf * 2, nf * 4, 4, 2, 1),
-        nn.InstanceNorm2d(nf * 4),
+        nn.InstanceNorm2d(nf * 4, track_running_stats=True),
         nn.LeakyReLU(0.2, inplace=True),
         # state size. (nf * 4) x 16 x 16 
         nn.Conv2d(nf * 4, nf * 8, 4, 2, 1),
-        nn.InstanceNorm2d(nf * 8),
+        nn.InstanceNorm2d(nf * 8, track_running_stats=True),
         nn.LeakyReLU(0.2, inplace=True),
         # state size. (nf * 8) x 8 x 8
         nn.Conv2d(nf * 8, nf * 16, 4, 2, 1),
-        nn.InstanceNorm2d(nf * 16),
+        nn.InstanceNorm2d(nf * 16, track_running_stats=True),
         nn.LeakyReLU(0.2, inplace=True),
         # state size. (nf * 16) x 4 x 4 
         nn.Conv2d(nf * 16, no, 4, 1, 0),
@@ -129,10 +130,10 @@ class BasicBlock(nn.Module):
     def __init__(self, inplanes, planes, stride=1, downsample=None):
         super(BasicBlock, self).__init__()
         self.conv1 = conv3x3(inplanes, planes, stride)
-        self.bn1 = nn.InstanceNorm2d(planes)
+        self.bn1 = nn.InstanceNorm2d(planes, track_running_stats=True)
         self.relu = nn.ReLU(inplace=True)
         self.conv2 = conv3x3(planes, planes)
-        self.bn2 = nn.InstanceNorm2d(planes)
+        self.bn2 = nn.InstanceNorm2d(planes, track_running_stats=True)
         self.downsample = downsample
         self.stride = stride
 
@@ -161,11 +162,11 @@ class Bottleneck(nn.Module):
     def __init__(self, inplanes, planes, stride=1, downsample=None):
         super(Bottleneck, self).__init__()
         self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=1)
-        self.bn1 = nn.InstanceNorm2d(planes)
+        self.bn1 = nn.InstanceNorm2d(planes, track_running_stats=True)
         self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=stride, padding=1)
-        self.bn2 = nn.InstanceNorm2d(planes)
+        self.bn2 = nn.InstanceNorm2d(planes, track_running_stats=True)
         self.conv3 = nn.Conv2d(planes, planes * 4, kernel_size=1)
-        self.bn3 = nn.InstanceNorm2d(planes * 4)
+        self.bn3 = nn.InstanceNorm2d(planes * 4, track_running_stats=True)
         self.relu = nn.ReLU(inplace=True)
         self.downsample = downsample
         self.stride = stride
@@ -199,7 +200,7 @@ class ResNet(nn.Module):
         self.inplanes = 64
         super(ResNet, self).__init__()
         self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3)
-        self.bn1 = nn.InstanceNorm2d(64)
+        self.bn1 = nn.InstanceNorm2d(64, track_running_stats=True)
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         self.layer1 = self._make_layer(block, 64, layers[0])
@@ -224,7 +225,7 @@ class ResNet(nn.Module):
             downsample = nn.Sequential(
                 nn.Conv2d(self.inplanes, planes * block.expansion,
                           kernel_size=1, stride=stride),
-                nn.InstanceNorm2d(planes * block.expansion),
+                nn.InstanceNorm2d(planes * block.expansion, track_running_stats=True),
             )
 
         layers = []
@@ -268,15 +269,15 @@ class _netG_resnet(nn.Module):
 
         n_in = self.num_ft * 2
         self.decoder.convt_0 = nn.ConvTranspose2d(n_in, ngf * 8, 4, 1, 0)
-        self.decoder.norm_0 = nn.InstanceNorm2d(ngf * 8)
+        self.decoder.norm_0 = nn.InstanceNorm2d(ngf * 8, track_running_stats=True)
         self.decoder.convt_1 = nn.ConvTranspose2d(ngf * 16, ngf * 8, 4, 2, 1)
-        self.decoder.norm_1 = nn.InstanceNorm2d(ngf * 8)
+        self.decoder.norm_1 = nn.InstanceNorm2d(ngf * 8, track_running_stats=True)
         self.decoder.convt_2 = nn.ConvTranspose2d(ngf * 16, ngf * 4, 4, 2, 1)
-        self.decoder.norm_2 = nn.InstanceNorm2d(ngf * 4)
+        self.decoder.norm_2 = nn.InstanceNorm2d(ngf * 4, track_running_stats=True)
         self.decoder.convt_3 = nn.ConvTranspose2d(ngf * 8, ngf * 2, 4, 2, 1)
-        self.decoder.norm_3 = nn.InstanceNorm2d(ngf * 2)
+        self.decoder.norm_3 = nn.InstanceNorm2d(ngf * 2, track_running_stats=True)
         self.decoder.convt_4 = nn.ConvTranspose2d(ngf * 4, ngf, 4, 2, 1)
-        self.decoder.norm_4 = nn.InstanceNorm2d(ngf)
+        self.decoder.norm_4 = nn.InstanceNorm2d(ngf, track_running_stats=True)
         self.decoder.convt_5 = nn.ConvTranspose2d(ngf * 2, no, 4, 2, 1)
 
         init_weights(self.decoder, init_type='normal')
@@ -344,7 +345,7 @@ class _netG_resnet(nn.Module):
 # that has the same size as the input
 class GANLoss(nn.Module):
     def __init__(self, use_lsgan=True, use_gpu=True, target_real_label=1.0, target_fake_label=0.0,
-                 tensor=torch.FloatTensor):
+                 tensor=torch.FloatTensor, gpu_ids = None):
         super(GANLoss, self).__init__()
         self.real_label = target_real_label
         self.fake_label = target_fake_label
@@ -352,13 +353,15 @@ class GANLoss(nn.Module):
         self.fake_label_var = None
         self.Tensor = tensor
         self.use_gpu = use_gpu
+        self.gpu_ids = gpu_ids
         if use_lsgan:
             self.loss = nn.MSELoss()
         else:
             self.loss = nn.BCELoss()
 
         if use_gpu:
-            self.loss.cuda()
+            device = torch.device("cuda:{}".format(self.gpu_ids[0]))
+            self.loss.to(device)
 
     def get_target_tensor(self, input, target_is_real):
         target_tensor = None
@@ -383,7 +386,12 @@ class GANLoss(nn.Module):
         return target_tensor
 
     def __call__(self, input, target_is_real):
+        if not isinstance(input, torch.Tensor):
+            print("Input is not a tensor. Please provide a tensor.")
         target_tensor = self.get_target_tensor(input, target_is_real)
+        target_tensor = target_tensor.to(self.gpu_ids[0])
+        # print(type(input))
+        # print(type(target_tensor))
         return self.loss(input, target_tensor)
 
 
