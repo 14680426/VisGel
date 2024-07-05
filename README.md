@@ -1,6 +1,6 @@
 # Connecting Touch and Vision via Cross-Modal Prediction
 
-Yunzhu Li, Jun-Yan Zhu, Russ Tedrake, Antonio Torralba 
+官方提供的源代码无法正常运行，经过修改后可以正常运行
 
 **CVPR 2019**
 [[website]](http://visgel.csail.mit.edu/) [[paper]](http://visgel.csail.mit.edu/visgel-paper.pdf)
