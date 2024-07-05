@@ -31,9 +31,9 @@ class VisionTouchDataset(Dataset):
     def __init__(self, phase, data_lst_file,
                  w_timewindow,
                  trans_des=None, trans_lowres=None,
-                 trans_to_tensor=None,
+                 trans_to_tensor=None, trans_to_tensor_2=None,
                  scale_size=None, crop_size=None,
-                 brightness=None, contrast=None, saturation=None, hue=None,
+                 brightness=None, contrast=None, saturation=None, hue=0.2,#将hue=None改为0.2
                  loader=default_loader):
 
         self.phase = phase
@@ -42,7 +42,7 @@ class VisionTouchDataset(Dataset):
         self.trans_des = trans_des
         self.trans_lowres = trans_lowres
         self.trans_to_tensor = trans_to_tensor
-
+        self.trans_to_tensor_2 = trans_to_tensor_2
         self.loader = loader
 
         self.scale_size = scale_size
@@ -74,8 +74,10 @@ class VisionTouchDataset(Dataset):
             if w == tw and h == th:
                 return 0, 0, h, w
 
-            i = random.randint(0, h - th)
-            j = random.randint((w - tw) / 2. - 8, (w - tw) / 2. + 8)
+            i = random.randint(0, h - th) #注释
+            # i = random.randint(0, int(h - th))
+            j = random.randint((w - tw) / 2. - 8, (w - tw) / 2. + 8)  #注释
+            # j = random.randint(int((w - tw) / 2. - 8), int((w - tw) / 2. + 8))
 
         else:
             i = int(round((h - th) / 2.))
@@ -175,8 +177,8 @@ class VisionTouchDataset(Dataset):
         # transform all images to torch tensor
         ref_src = self.trans_to_tensor(ref_src)
         ref_src_lowres = self.trans_to_tensor(ref_src_lowres)
-        src = self.trans_to_tensor(src)
-        src_lowres = self.trans_to_tensor(src_lowres)
+        src = self.trans_to_tensor_2(src)
+        src_lowres = self.trans_to_tensor_2(src_lowres)
         src_rgb = self.trans_to_tensor(src_rgb)
 
         ref_des = self.trans_to_tensor(ref_des)
